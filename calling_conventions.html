@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mastering x86 and x64 Calling Conventions</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #fff8dc;
+        }
+        header {
+            background: #cc9900;
+            color: white;
+            text-align: center;
+            padding: 1em;
+        }
+        .container {
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #ffeb99;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+        }
+        h2, h3 {
+            color: #003366;
+        }
+        p {
+            line-height: 1.6;
+        }
+        ul, ol {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .code {
+            background: #eee;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            overflow-x: auto;
+        }
+        .quiz-button {
+            margin: 5px;
+            padding: 8px 16px;
+            background-color: #e7e7e7;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+            text-align: left;
+            max-width: 600px;
+        }
+        .quiz-button:hover {
+            background-color: #ddd;
+        }
+        .feedback {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 18px;
+            display: none;
+        }
+        .correct {
+            background-color: #dff0d8;
+            color: #3c763d;
+            border: 1px solid #d6e9c6;
+        }
+        .incorrect {
+            background-color: #f2dede;
+            color: #a94442;
+            border: 1px solid #ebccd1;
+        }
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .comparison-table th, .comparison-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .comparison-table th {
+            background-color: #cc9900;
+            color: white;
+        }
+        .comparison-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .quiz-container {
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Mastering x86 and x64 Calling Conventions</h1>
+    </header>
+    <div class="container">
+        <h2>Introduction</h2>
+        <p>When writing assembly code, we need a way to call and return from functions in an organized way. A <strong>calling convention</strong> defines how functions receive parameters, return values, and manage the stack. Understanding these rules is essential for debugging, reverse engineering, and optimizing code.</p>
+
+        <h2>What is Involved in Calling Conventions?</h2>
+        <p>Calling conventions address several critical aspects of function execution:</p>
+        <ul>
+            <li><strong>CPU Return:</strong> How will we get the CPU back to where it should be after a function completes?</li>
+            <li><strong>Local Variables:</strong> How will we restore our local variables when returning to the caller?</li>
+            <li><strong>Parameter Passing:</strong> How do we pass parameters to functions?</li>
+            <li><strong>Stack Frame Cleanup:</strong> How do we clean up our stack frame after function execution?</li>
+            <li><strong>Architecture Differences:</strong> What changes between 32-bit and 64-bit programs?</li>
+        </ul>
+
+        <h2>Understanding Function Calls</h2>
+        <p>Function calls in x86/x64 follow these key steps:</p>
+        <ol>
+            <li>Push arguments (onto the stack or into registers, depending on the convention).</li>
+            <li>Use the <code>CALL</code> instruction to jump to the function.</li>
+            <li>Function prologue: set up a new stack frame.</li>
+            <li>Function execution: perform operations.</li>
+            <li>Function epilogue: clean up and return using <code>RET</code>.</li>
+        </ol>
+    </div>
+    
+    <div class="container">
+        <h2>How Will We Get the CPU Back to Where It Should Be?</h2>
+        <p>The <code>CALL</code> instruction automatically pushes the return address (the address of the instruction following the call) onto the stack. The <code>RET</code> instruction pops this address from the stack and jumps to it, returning control to the caller.</p>
+        <div class="code">
+            ; Caller code<br>
+            call my_function     ; Push return address and jump to function<br>
+            ; Execution continues here after function returns<br>
+            <br>
+            ; Function code<br>
+            my_function:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;; Function body<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;ret                 ; Pop return address and jump back
+        </div>
+
+        <h2>How Will We Restore Our Local Variables?</h2>
+        <p>Local variables are managed using the base pointer (EBP/RBP) and stack pointer (ESP/RSP). The function prologue saves the previous base pointer and establishes a new stack frame, while the epilogue restores the original state.</p>
+        <div class="code">
+            ; Function prologue<br>
+            push ebp             ; Save old base pointer<br>
+            mov ebp, esp         ; Set new base pointer<br>
+            sub esp, 16          ; Allocate space for local variables<br>
+            <br>
+            ; Access local variables using negative offsets from EBP<br>
+            mov [ebp-4], eax     ; First local variable<br>
+            mov [ebp-8], ebx     ; Second local variable<br>
+            <br>
+            ; Function epilogue<br>
+            mov esp, ebp         ; Deallocate local variables<br>
+            pop ebp              ; Restore old base pointer<br>
+            ret                  ; Return to caller
+        </div>
+    </div>
+    
+    <div class="container">
+        <h2>How Do We Pass Parameters?</h2>
+        
+        <h3>x86 (32-bit) Parameter Passing</h3>
+        <p>In most 32-bit calling conventions, parameters are passed on the stack.</p>
+        <div class="code">
+            ; Caller (32-bit)<br>
+            push dword 30        ; Third parameter<br>
+            push dword 20        ; Second parameter<br>
+            push dword 10        ; First parameter<br>
+            call my_function     ; Call function<br>
+            add esp, 12          ; Clean up stack (3 params × 4 bytes) - for cdecl only<br>
+            <br>
+            ; Function (32-bit)<br>
+            my_function:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;push ebp<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;mov ebp, esp<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;; Access parameters<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;mov eax, [ebp+8]    ; First parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;mov ebx, [ebp+12]   ; Second parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;mov ecx, [ebp+16]   ; Third parameter
+        </div>
+        
+        <h3>x64 (64-bit) Parameter Passing</h3>
+        <p>In 64-bit calling conventions, the first parameters are passed in registers, with additional parameters on the stack.</p>
+        <div class="code">
+            ; Caller (64-bit)<br>
+            mov r9, 60           ; Sixth parameter<br>
+            mov r8, 50           ; Fifth parameter<br>
+            mov rcx, 40          ; Fourth parameter<br>
+            mov rdx, 30          ; Third parameter<br>
+            mov rsi, 20          ; Second parameter<br>
+            mov rdi, 10          ; First parameter<br>
+            push qword 70        ; Seventh parameter (on stack)<br>
+            call my_function     ; Call function<br>
+            add rsp, 8           ; Clean up stack (only for parameters beyond the 6th)<br>
+            <br>
+            ; Function (64-bit)<br>
+            my_function:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;push rbp<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;mov rbp, rsp<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;; First 6 parameters are in registers already<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;; rdi = first parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;; rsi = second parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;; rdx = third parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;; rcx = fourth parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;; r8 = fifth parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;; r9 = sixth parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;; [rbp+16] = seventh parameter
+        </div>
+    </div>
+    
+    <div class="container">
+        <h2>How Do We Clean Up Our Stack Frame?</h2>
+        <p>Stack cleanup responsibilities vary by calling convention:</p>
+        
+        <h3>x86 Calling Conventions</h3>
+        <h4>1. cdecl (Caller Cleans Stack)</h4>
+        <p>Used in C programs. The caller is responsible for cleaning the stack.</p>
+        <div class="code">
+            ; Caller (cdecl)<br>
+            push dword 20        ; Second parameter<br>
+            push dword 10        ; First parameter<br>
+            call sum             ; Call function<br>
+            add esp, 8           ; Caller cleans the stack (2 params × 4 bytes)<br>
+            <br>
+            ; Function (cdecl)<br>
+            sum:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;push ebp<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;mov ebp, esp<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;mov eax, [ebp+8]    ; First parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;add eax, [ebp+12]   ; Add second parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;pop ebp<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;ret                 ; Simple return
+        </div>
+        
+        <h4>2. stdcall (Callee Cleans Stack)</h4>
+        <p>Used in Windows API. The function itself cleans the stack before returning.</p>
+        <div class="code">
+            ; Caller (stdcall)<br>
+            push dword 20        ; Second parameter<br>
+            push dword 10        ; First parameter<br>
+            call sum_stdcall     ; Call function<br>
+            ; No stack cleanup needed!<br>
+            <br>
+            ; Function (stdcall)<br>
+            sum_stdcall:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;push ebp<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;mov ebp, esp<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;mov eax, [ebp+8]    ; First parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;add eax, [ebp+12]   ; Add second parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;pop ebp<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;ret 8               ; Return and pop 8 bytes (2 params × 4 bytes)
+        </div>
+        
+        <h4>3. fastcall (Registers + Callee Cleans)</h4>
+        <p>First two parameters in registers (ECX, EDX), others on stack. Callee cleans stack.</p>
+        <div class="code">
+            ; Caller (fastcall)<br>
+            push dword 30        ; Third parameter (on stack)<br>
+            mov edx, 20          ; Second parameter (in EDX)<br>
+            mov ecx, 10          ; First parameter (in ECX)<br>
+            call sum_fastcall    ; Call function<br>
+            ; No stack cleanup needed!<br>
+            <br>
+            ; Function (fastcall)<br>
+            sum_fastcall:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;push ebp<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;mov ebp, esp<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;; ecx and edx already contain first two parameters<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;mov eax, ecx        ; First parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;add eax, edx        ; Add second parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;add eax, [ebp+8]    ; Add third parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;pop ebp<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;ret 4               ; Return and pop 4 bytes (third parameter)
+        </div>
+        
+        <h3>x64 System V ABI (Linux/macOS)</h3>
+        <p>In 64-bit x86, the System V calling convention is used on Linux and macOS. Parameters 1-6 are in registers, 7+ on stack.</p>
+        <div class="code">
+            ; Caller (x64 System V)<br>
+            mov r9, 60           ; Sixth parameter<br>
+            mov r8, 50           ; Fifth parameter<br>
+            mov rcx, 40          ; Fourth parameter<br>
+            mov rdx, 30          ; Third parameter<br>
+            mov rsi, 20          ; Second parameter<br>
+            mov rdi, 10          ; First parameter<br>
+            call sum_x64         ; Call function<br>
+            <br>
+            ; Function (x64 System V)<br>
+            sum_x64:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;push rbp<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;mov rbp, rsp<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;; Parameters already in registers<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;mov rax, rdi        ; First parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;add rax, rsi        ; Add second parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;add rax, rdx        ; Add third parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;add rax, rcx        ; Add fourth parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;add rax, r8         ; Add fifth parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;add rax, r9         ; Add sixth parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;pop rbp<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;ret
+        </div>
+        
+        <h3>x64 Microsoft x64 (Windows)</h3>
+        <p>Windows 64-bit uses a slightly different convention. First 4 parameters in registers (RCX, RDX, R8, R9).</p>
+        <div class="code">
+            ; Caller (Windows x64)<br>
+            mov r9, 40           ; Fourth parameter<br>
+            mov r8, 30           ; Third parameter<br>
+            mov rdx, 20          ; Second parameter<br>
+            mov rcx, 10          ; First parameter<br>
+            call sum_win64       ; Call function<br>
+            <br>
+            ; Function (Windows x64)<br>
+            sum_win64:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;push rbp<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;mov rbp, rsp<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;sub rsp, 32         ; Shadow space (required by Windows x64)<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;; Parameters already in registers<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;mov rax, rcx        ; First parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;add rax, rdx        ; Add second parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;add rax, r8         ; Add third parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;add rax, r9         ; Add fourth parameter<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;add rsp, 32         ; Clean up shadow space<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;pop rbp<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;ret
+        </div>
+    </div>
+    
+    <div class="container">
+        <h2>What Changes Between 64-bit and 32-bit Programs?</h2>
+        
+        <table class="comparison-table">
+            <tr>
+                <th>Feature</th>
+                <th>x86 (32-bit)</th>
+                <th>x64 (64-bit)</th>
+            </tr>
+            <tr>
+                <td>Register Size</td>
+                <td>32-bit (EAX, EBX, etc.)</td>
+                <td>64-bit (RAX, RBX, etc.)</td>
+            </tr>
+            <tr>
+                <td>Parameter Passing</td>
+                <td>Primarily stack-based</td>
+                <td>First 4-6 in registers, then stack</td>
+            </tr>
+            <tr>
+                <td>Register Usage</td>
+                <td>Fewer registers (8 general-purpose)</td>
+                <td>More registers (16 general-purpose)</td>
+            </tr>
+            <tr>
+                <td>Stack Alignment</td>
+                <td>4-byte alignment</td>
+                <td>16-byte alignment required</td>
+            </tr>
+            <tr>
+                <td>Return Value</td>
+                <td>EAX (32-bit)</td>
+                <td>RAX (64-bit)</td>
+            </tr>
+            <tr>
+                <td>Red Zone</td>
+                <td>Not present</td>
+                <td>128 bytes below RSP (Linux/macOS)</td>
+            </tr>
+            <tr>
+                <td>Address Size</td>
+                <td>32-bit addresses</td>
+                <td>64-bit addresses</td>
+            </tr>
+            <tr>
+                <td>Shadow Space</td>
+                <td>Not required</td>
+                <td>Required on Windows (32 bytes)</td>
+            </tr>
+        </table>
+        
+        <h3>Key Differences Explained</h3>
+        <ul>
+            <li><strong>Register-based Parameter Passing:</strong> x64 moves away from stack-based parameters to register-based parameters for better performance.</li>
+            <li><strong>More Registers:</strong> x64 adds 8 new general-purpose registers (R8-R15), providing more flexibility.</li>
+            <li><strong>Shadow Space:</strong> Windows x64 requires 32 bytes of "shadow space" on the stack for the first four parameters.</li>
+            <li><strong>Red Zone:</strong> System V x64 (Linux/macOS) has a 128-byte "red zone" below the stack pointer that functions can use without adjusting RSP.</li>
+            <li><strong>Stack Alignment:</strong> x64 enforces stricter 16-byte stack alignment, while x86 typically requires only 4-byte alignment.</li>
+        </ul>
+    </div>
+    
+    <div class="container">
+        <h2>Quiz: Test Your Knowledge</h2>
+        <p>Try these questions to check your understanding of x86 and x64 calling conventions:</p>
+
+        <div class="quiz-container">
+            <h3>1. Which calling convention requires the caller to clean up the stack?</h3>
+            <button class="quiz-button" onclick="checkAnswer(1, 'A')">A) stdcall</button>
+            <button class="quiz-button" onclick="checkAnswer(1, 'B')">B) cdecl</button>
+            <button class="quiz-button" onclick="checkAnswer(1, 'C')">C) fastcall</button>
+            <button class="quiz-button" onclick="checkAnswer(1, 'D')">D) thiscall</button>
+            <div id="feedback-1" class="feedback"></div>
+        </div>
+
+        <div class="quiz-container">
+            <h3>2. In x64 System V calling conventions, which register holds the first argument?</h3>
+            <button class="quiz-button" onclick="checkAnswer(2, 'A')">A) RCX</button>
+            <button class="quiz-button" onclick="checkAnswer(2, 'B')">B) RDI</button>
+            <button class="quiz-button" onclick="checkAnswer(2, 'C')">C) RSI</button>
+            <button class="quiz-button" onclick="checkAnswer(2, 'D')">D) RDX</button>
+            <div id="feedback-2" class="feedback"></div>
+        </div>
+        
+        <div class="quiz-container">
+            <h3>3. How does the RET instruction help return the CPU to where it should be?</h3>
+            <button class="quiz-button" onclick="checkAnswer(3, 'A')">A) It resets all registers</button>
+            <button class="quiz-button" onclick="checkAnswer(3, 'B')">B) It pops the return address from the stack and jumps to it</button>
+            <button class="quiz-button" onclick="checkAnswer(3, 'C')">C) It restores the base pointer</button>
+            <button class="quiz-button" onclick="checkAnswer(3, 'D')">D) It deallocates local variables</button>
+            <div id="feedback-3" class="feedback"></div>
+        </div>
+        
+        <div class="quiz-container">
+            <h3>4. In a function prologue, what does "PUSH EBP; MOV EBP, ESP" accomplish?</h3>
+            <button class="quiz-button" onclick="checkAnswer(4, 'A')">A) It saves function parameters</button>
+            <button class="quiz-button" onclick="checkAnswer(4, 'B')">B) It sets up a new stack frame for local variables</button>
+            <button class="quiz-button" onclick="checkAnswer(4, 'C')">C) It cleans up the stack after function call</button>
+            <button class="quiz-button" onclick="checkAnswer(4, 'D')">D) It returns to the caller</button>
+            <div id="feedback-4" class="feedback"></div>
+        </div>
+        
+        <div class="quiz-container">
+            <h3>5. What is a key difference between x86 and x64 parameter passing?</h3>
+            <button class="quiz-button" onclick="checkAnswer(5, 'A')">A) x64 doesn't use the stack at all</button>
+            <button class="quiz-button" onclick="checkAnswer(5, 'B')">B) x86 uses registers exclusively</button>
+            <button class="quiz-button" onclick="checkAnswer(5, 'C')">C) x64 passes first parameters in registers instead of stack</button>
+            <button class="quiz-button" onclick="checkAnswer(5, 'D')">D) x86 and x64 parameter passing is identical</button>
+            <div id="feedback-5" class="feedback"></div>
+        </div>
+    </div>
+
+    <script>
+        // Quiz correct answers
+        const correctAnswers = {
+            1: "B",
+            2: "B",
+            3: "B",
+            4: "B",
+            5: "C"
+        };
+        
+        // Function to check answers
+        function checkAnswer(questionNumber, selectedOption) {
+            // Get all buttons for this question
+            const questionContainer = document.querySelector(`#feedback-${questionNumber}`).parentNode;
+            const buttons = questionContainer.querySelectorAll('.quiz-button');
+            
+            // Disable all buttons
+            buttons.forEach(btn => {
+                btn.disabled = true;
+            });
+            
+            // Get the feedback element
+            const feedback = document.getElementById(`feedback-${questionNumber}`);
+            
+            // Check if the answer is correct
+            const isCorrect = selectedOption === correctAnswers[questionNumber];
+            
+            // Highlight the selected button and the correct button
+            buttons.forEach(btn => {
+                const btnText = btn.textContent;
+                const btnOption = btnText.charAt(0);
+                
+                if (btnOption === selectedOption) {
+                    // This is the selected button
+                    if (isCorrect) {
+                        btn.style.backgroundColor = '#4CAF50';
+                        btn.style.color = 'white';
+                    } else {
+                        btn.style.backgroundColor = '#f44336';
+                        btn.style.color = 'white';
+                    }
+                } else if (btnOption === correctAnswers[questionNumber] && !isCorrect) {
+                    // This is the correct button (highlight if user selected wrong)
+                    btn.style.backgroundColor = '#4CAF50';
+                    btn.style.color = 'white';
+                }
+            });
+            
+            // Show feedback
+            if (isCorrect) {
+                feedback.textContent = "CORRECT ANSWER";
+                feedback.className = "feedback correct";
+            } else {
+                feedback.textContent = "WRONG ANSWER";
+                feedback.className = "feedback incorrect";
+            }
+            feedback.style.display = "block";
+        }
+    </script>
+</body>
+</html>
